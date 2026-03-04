@@ -14,6 +14,8 @@ const ResumeCustomizer = () => {
   const [tailoringGuidance, setTailoringGuidance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [savedApplications, setSavedApplications] = useState([]);
+  const [learnedSkills, setLearnedSkills] = useState({});
+  const [skillsSeeded, setSkillsSeeded] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editedProfile, setEditedProfile] = useState({ resumeText: '', linkedInUrl: '' });
   
@@ -109,46 +111,124 @@ Network & Voice Engineering Roles — Twitter, Salesforce, Fleet One, GHD, Swinb
     initializeApp();
   }, []);
 
+  const getDefaultProfile = () => ({
+    resumeText: GLEN_RESUME,
+    linkedInUrl: 'linkedin.com/in/glencook'
+  });
+
+  const loadStorage = async () => {
+    const response = await fetch('/api/storage', { cache: 'no-store' });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.error || 'Failed to load data');
+    }
+    return response.json();
+  };
+
+  const saveStorage = async (data) => {
+    const response = await fetch('/api/storage', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData?.error || 'Failed to save data');
+    }
+  };
+
+  const migrateLocalStorageData = () => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const profileRaw = window.localStorage.getItem('resume_profile');
+    const appsRaw = window.localStorage.getItem('saved_applications');
+    const skillsRaw = window.localStorage.getItem('learned_skills');
+    const seedRaw = window.localStorage.getItem('skills_seeded');
+
+    if (!profileRaw && !appsRaw && !skillsRaw) {
+      return null;
+    }
+
+    let migratedProfile = null;
+    let migratedApps = [];
+    let migratedSkills = {};
+
+    try {
+      if (profileRaw) {
+        migratedProfile = JSON.parse(profileRaw);
+      }
+      if (appsRaw) {
+        migratedApps = JSON.parse(appsRaw);
+      }
+      if (skillsRaw) {
+        migratedSkills = JSON.parse(skillsRaw);
+      }
+    } catch (error) {
+      console.warn('Failed to parse legacy localStorage data:', error);
+      return null;
+    }
+
+    window.localStorage.removeItem('resume_profile');
+    window.localStorage.removeItem('saved_applications');
+    window.localStorage.removeItem('learned_skills');
+    window.localStorage.removeItem('skills_seeded');
+
+    return {
+      profile: migratedProfile,
+      savedApplications: Array.isArray(migratedApps) ? migratedApps : [],
+      learnedSkills: migratedSkills && typeof migratedSkills === 'object' ? migratedSkills : {},
+      skillsSeeded: seedRaw === 'true',
+    };
+  };
+
   const initializeApp = async () => {
     try {
-        const profile = localStorage.getItem('resume_profile');
-        const apps = localStorage.getItem('saved_applications');
+        const storedData = await loadStorage();
+        const legacyData = !storedData?.profile ? migrateLocalStorageData() : null;
+        const sourceData = legacyData || storedData;
 
-        // Seed interview Q&A into learned_skills once
-        if (!localStorage.getItem('skills_seeded')) {
-          const existing = localStorage.getItem('learned_skills');
-          const learnedSkills = existing ? JSON.parse(existing) : {};
+        let nextLearnedSkills =
+          sourceData?.learnedSkills && typeof sourceData.learnedSkills === 'object'
+            ? sourceData.learnedSkills
+            : {};
+        let nextSkillsSeeded = Boolean(sourceData?.skillsSeeded);
+
+        if (!nextSkillsSeeded) {
           interviewData.interview_prep_clean_versions.forEach(({ question, clean_60_second_version }) => {
-            learnedSkills[question] = clean_60_second_version;
+            nextLearnedSkills[question] = clean_60_second_version;
           });
-          localStorage.setItem('learned_skills', JSON.stringify(learnedSkills));
-          localStorage.setItem('skills_seeded', 'true');
+          nextSkillsSeeded = true;
         }
 
-        if (apps) setSavedApplications(JSON.parse(apps));
+        const nextProfile = sourceData?.profile || getDefaultProfile();
+        const nextApps = Array.isArray(sourceData?.savedApplications) ? sourceData.savedApplications : [];
 
-        if (profile) {
-          setProfileData(JSON.parse(profile));
-        } else {
-          const glenProfile = {
-            resumeText: GLEN_RESUME,
-            linkedInUrl: 'linkedin.com/in/glencook'
-          };
-          localStorage.setItem('resume_profile', JSON.stringify(glenProfile));
-          setProfileData(glenProfile);
-        }
+        setProfileData(nextProfile);
+        setSavedApplications(nextApps);
+        setLearnedSkills(nextLearnedSkills);
+        setSkillsSeeded(nextSkillsSeeded);
+
+        await saveStorage({
+          profile: nextProfile,
+          savedApplications: nextApps,
+          learnedSkills: nextLearnedSkills,
+          skillsSeeded: nextSkillsSeeded,
+        });
         setStep('input');
     } catch (error) {
         console.error('Storage error:', error);
-        const glenProfile = {
-          resumeText: GLEN_RESUME,
-          linkedInUrl: 'linkedin.com/in/glencook'
-        };
+        const glenProfile = getDefaultProfile();
         setProfileData(glenProfile);
+        setSavedApplications([]);
+        setLearnedSkills({});
+        setSkillsSeeded(false);
         setStep('input');
     }
   };
-    const analyzeJobDescription = async () => {
+  const analyzeJobDescription = async () => {
     if (!jobDescription.trim()) {
         alert('Please paste a job description first');
         return;
@@ -157,23 +237,13 @@ Network & Voice Engineering Roles — Twitter, Salesforce, Fleet One, GHD, Swinb
     setLoading(true);
     
     try {
-        // Get learned skills from storage
-        let learnedSkills = {};
         let previouslyAskedQuestions = [];
-        
-        const learned = localStorage.getItem('learned_skills');
-        if (learned) learnedSkills = JSON.parse(learned);
-        
-        // Get all previously asked questions
-        const apps = localStorage.getItem('saved_applications');
-        if (apps) {
-        const savedApps = JSON.parse(apps);
-        savedApps.forEach(app => {
-            if (app.questions) {
+
+        savedApplications.forEach(app => {
+          if (app.questions) {
             previouslyAskedQuestions.push(...app.questions);
-            }
+          }
         });
-        }
 
         const response = await fetch('/api/anthropic/v1/messages', {
         method: 'POST',
@@ -237,23 +307,15 @@ If all gaps are covered: []`
     setLoading(true);
     
     try {
-      let learnedSkills = {};
-      try {
-        const learned = localStorage.getItem('learned_skills');
-        if (learned) learnedSkills = JSON.parse(learned.value);
-      } catch (e) {
-        // No learned skills yet
-      }
+      const updatedLearnedSkills = { ...learnedSkills };
 
       // Add new answers to learned skills
       Object.entries(answers).forEach(([question, answer]) => {
         const q = questions.find(q => q.question === question);
         if (q && answer.trim()) {
-          learnedSkills[q.skill] = answer;
+          updatedLearnedSkills[q.skill] = answer;
         }
       });
-
-      localStorage.setItem('learned_skills', JSON.stringify(learnedSkills));
 
       const response = await fetch('/api/anthropic/v1/messages', {
         method: 'POST',
@@ -271,7 +333,7 @@ JOB POSTING:
 ${jobDescription}
 
 ADDITIONAL QUALIFICATIONS:
-${Object.keys(learnedSkills).length > 0 ? Object.entries(learnedSkills).map(([skill, exp]) => `${skill}: ${exp}`).join('\n') : 'None'}
+${Object.keys(updatedLearnedSkills).length > 0 ? Object.entries(updatedLearnedSkills).map(([skill, exp]) => `${skill}: ${exp}`).join('\n') : 'None'}
 
 Provide specific guidance as JSON:
 {
@@ -306,7 +368,13 @@ Focus on actionable, specific guidance.`
       
       const updatedApps = [...savedApplications, newApp];
       setSavedApplications(updatedApps);
-      localStorage.setItem('saved_applications', JSON.stringify(updatedApps));
+      setLearnedSkills(updatedLearnedSkills);
+      await saveStorage({
+        profile: profileData,
+        savedApplications: updatedApps,
+        learnedSkills: updatedLearnedSkills,
+        skillsSeeded,
+      });
       
       setStep('result');
     } catch (error) {
@@ -325,11 +393,6 @@ Focus on actionable, specific guidance.`
   const downloadTailoredDocx = async () => {
     setLoading(true);
     try {
-        // Get learned skills
-        let learnedSkills = {};
-        const learned = localStorage.getItem('learned_skills');
-        if (learned) learnedSkills = JSON.parse(learned);
-
         // Generate the tailored resume using API
         const response = await fetch('/api/anthropic/v1/messages', {
         method: 'POST',
@@ -535,15 +598,6 @@ Focus on actionable, specific guidance.`
   const downloadTailoredResume = async () => {
     setLoading(true);
     try {
-      // Get learned skills
-      let learnedSkills = {};
-      try {
-        const learned = localStorage.getItem('learned_skills');
-        if (learned) learnedSkills = JSON.parse(learned.value);
-      } catch (e) {
-        console.log('No learned skills');
-      }
-
       // Generate the tailored resume using API
       const response = await fetch('/api/anthropic/v1/messages', {
         method: 'POST',
@@ -617,16 +671,12 @@ Return the complete tailored resume as plain text.`
 
   const exportData = async () => {
     try {
-      const profile = localStorage.getItem('resume_profile');
-      const apps = localStorage.getItem('saved_applications');
-      const skills = localStorage.getItem('learned_skills');
-      
       const exportData = {
         version: '1.0',
         exportDate: new Date().toISOString(),
-        profile: profile ? JSON.parse(profile.value) : null,
-        savedApplications: apps ? JSON.parse(apps.value) : [],
-        learnedSkills: skills ? JSON.parse(skills.value) : {}
+        profile: profileData,
+        savedApplications: savedApplications,
+        learnedSkills: learnedSkills
       };
       
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -658,18 +708,23 @@ Return the complete tailored resume as plain text.`
       }
       
       if (data.profile) {
-        localStorage.setItem('resume_profile', JSON.stringify(data.profile));
         setProfileData(data.profile);
       }
       
       if (data.savedApplications) {
-        localStorage.setItem('saved_applications', JSON.stringify(data.savedApplications));
         setSavedApplications(data.savedApplications);
       }
       
       if (data.learnedSkills) {
-        localStorage.setItem('learned_skills', JSON.stringify(data.learnedSkills));
+        setLearnedSkills(data.learnedSkills);
       }
+
+      await saveStorage({
+        profile: data.profile || profileData,
+        savedApplications: data.savedApplications || [],
+        learnedSkills: data.learnedSkills || {},
+        skillsSeeded: true,
+      });
       
       alert('✅ Data imported successfully!');
       setStep('input');
@@ -687,13 +742,16 @@ Return the complete tailored resume as plain text.`
     }
     
     try {
-      localStorage.removeItem('resume_profile');
-      localStorage.removeItem('saved_applications');
-      localStorage.removeItem('learned_skills');
-      localStorage.removeItem('skills_seeded');
+      const response = await fetch('/api/storage', { method: 'DELETE' });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || 'Failed to clear data');
+      }
       
       setProfileData(null);
       setSavedApplications([]);
+      setLearnedSkills({});
+      setSkillsSeeded(false);
       initializeApp();
     } catch (error) {
       console.error('Failed to clear data:', error);
@@ -721,8 +779,13 @@ Return the complete tailored resume as plain text.`
     }
 
     try {
-      localStorage.setItem('resume_profile', JSON.stringify(editedProfile));
       setProfileData(editedProfile);
+      await saveStorage({
+        profile: editedProfile,
+        savedApplications,
+        learnedSkills,
+        skillsSeeded,
+      });
       setIsEditingProfile(false);
       alert('✅ Profile updated successfully!');
     } catch (error) {
