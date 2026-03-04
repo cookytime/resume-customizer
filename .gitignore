@@ -31,3 +31,5 @@ dist-ssr
 .vercel
 .env*.local
 \n# Local edge function secrets\nsupabase/functions/.env.local
+
+.next

@@ -1,3 +1,4 @@
+'use client';
 import React, { useState, useEffect } from 'react';
 import interviewData from '../interview_questions.json';
 import { FileText, Briefcase, Download, Save, Trash2, Plus, Upload, FolderDown, Edit2, X, Check, Copy, Lightbulb } from 'lucide-react';
