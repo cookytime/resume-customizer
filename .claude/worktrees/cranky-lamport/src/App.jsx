@@ -3,6 +3,9 @@ import React, { useState, useEffect } from 'react';
 import interviewData from '../interview_questions.json';
 import { FileText, Briefcase, Download, Save, Trash2, Plus, Upload, FolderDown, Edit2, X, Check, Copy, Lightbulb, ShieldCheck, BarChart3, History, Zap, Loader2, FileUp } from 'lucide-react';
 import mammoth from 'mammoth';
+import * as pdfjsLib from 'pdfjs-dist';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle, convertInchesToTwip } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -182,23 +185,16 @@ GOOD: "20+ years designing and operating enterprise network infrastructure. Deep
     setSkillsSeeded(nextSkillsSeeded);
     setStep(nextProfile.resumeText?.trim() ? 'input' : 'setup');
 
-    // Only persist if we have real data (legacy migration or skills seeding)
-    // Never overwrite stored data with empty defaults
-    const hasRealProfile = nextProfile.resumeText?.trim();
-    const didMigrate = Boolean(legacyData);
-    const didSeedSkills = !Boolean(sourceData?.skillsSeeded);
-
-    if (hasRealProfile || didMigrate || didSeedSkills) {
-      try {
-        await saveStorage({
-          profile: nextProfile,
-          savedApplications: nextApps,
-          learnedSkills: nextLearnedSkills,
-          skillsSeeded: nextSkillsSeeded,
-        });
-      } catch (error) {
-        console.error('Failed to persist initial state:', error);
-      }
+    // Save in background — don't block UI or wipe state on failure
+    try {
+      await saveStorage({
+        profile: nextProfile,
+        savedApplications: nextApps,
+        learnedSkills: nextLearnedSkills,
+        skillsSeeded: nextSkillsSeeded,
+      });
+    } catch (error) {
+      console.error('Failed to persist initial state:', error);
     }
   };
 
@@ -620,14 +616,23 @@ For each role in the experience section, write a 2-3 sentence narrative paragrap
         const tailoredText = data.content.map(item => item.type === 'text' ? item.text : '').join('');
         setTailoredResumeText(tailoredText);
 
-        // Save resume markdown to Blob
+        // Save resume markdown to Blob and update job record
         if (currentJobId) {
           try {
-            await fetch(`/api/jobs/${currentJobId}/documents`, {
+            const docRes = await fetch(`/api/jobs/${currentJobId}/documents`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ resume: tailoredText }),
             });
+            if (docRes.ok) {
+              const { resumeKey } = await docRes.json();
+              // Update job record with resumeKey
+              await fetch('/api/jobs', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: currentJobId, resumeKey }),
+              });
+            }
           } catch (e) {
             console.warn('Could not save resume to Blob:', e.message);
           }
@@ -890,11 +895,19 @@ For each role in the experience section, write a 2-3 sentence narrative paragrap
           setCurrentJobId(jobData.id);
           // Save resume markdown to the new job
           try {
-            await fetch(`/api/jobs/${jobData.id}/documents`, {
+            const docRes = await fetch(`/api/jobs/${jobData.id}/documents`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ resume: tailoredResumeText }),
             });
+            if (docRes.ok) {
+              const { resumeKey } = await docRes.json();
+              await fetch('/api/jobs', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: jobData.id, resumeKey }),
+              });
+            }
           } catch (e) {
             console.warn('Could not save resume document:', e.message);
           }
@@ -910,11 +923,19 @@ For each role in the experience section, write a 2-3 sentence narrative paragrap
       } else {
         // Update existing job record with resume markdown
         try {
-          await fetch(`/api/jobs/${currentJobId}/documents`, {
+          const docRes = await fetch(`/api/jobs/${currentJobId}/documents`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ resume: tailoredResumeText }),
           });
+          if (docRes.ok) {
+            const { resumeKey } = await docRes.json();
+            await fetch('/api/jobs', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: currentJobId, resumeKey, status: 'Applied' }),
+            });
+          }
         } catch (e) {
           console.warn('Could not save resume document:', e.message);
         }
@@ -1335,8 +1356,6 @@ Rules:
         setSetupResumeText(result.value);
       } else if (ext === 'pdf') {
         const arrayBuffer = await file.arrayBuffer();
-        const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         let text = '';
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -1574,8 +1593,7 @@ Rules:
                               setEditedProfile({...editedProfile, resumeText: result.value});
                             } else if (ext === 'pdf') {
                               const arrayBuffer = await file.arrayBuffer();
-                              const pdfjsLib = await import('pdfjs-dist');
-                              pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+                              pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
                               const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                               let text = '';
                               for (let i = 1; i <= pdf.numPages; i++) {
@@ -1857,7 +1875,7 @@ Rules:
               {savedToTracker ? (
                 <>
                   <Check size={20} />
-                  Saved to Job Tracker
+                  Saved to Job Tracker — <a href="/dashboard" className="underline">View Dashboard</a>
                 </>
               ) : loading ? (
                 <>

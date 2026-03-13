@@ -4,7 +4,7 @@ import { auth0 } from '../../../lib/auth0';
 const JOBS_BLOB_NAME = 'jobs.json';
 
 function getUserJobsPath(userSub) {
-  return `users/${encodeURIComponent(userSub)}/${JOBS_BLOB_NAME}`;
+  return `users/${userSub}/${JOBS_BLOB_NAME}`;
 }
 
 async function getSessionUser() {
@@ -16,7 +16,7 @@ async function getSessionUser() {
 
 async function loadJobs(userSub) {
   try {
-    const blob = await get(getUserJobsPath(userSub), { access: 'private' });
+    const blob = await get(getUserJobsPath(userSub), { access: 'private', useCache: false });
     if (!blob?.stream) return [];
     const text = await new Response(blob.stream).text();
     const parsed = JSON.parse(text);

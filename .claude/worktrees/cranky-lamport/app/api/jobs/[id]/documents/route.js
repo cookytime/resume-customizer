@@ -2,6 +2,7 @@ import { get, put } from '@vercel/blob';
 import { auth0 } from '../../../../../lib/auth0';
 
 function getUserDocPath(userSub, jobId, docType) {
+  // NEVER use encodeURIComponent — @vercel/blob SDK handles encoding internally.
   return `users/${userSub}/jobs/${jobId}/${docType}.md`;
 }
 
@@ -62,7 +63,7 @@ export async function GET(request, { params }) {
     const docType = searchParams.get('type') || 'resume';
 
     const docPath = getUserDocPath(userSub, id, docType);
-    const blob = await get(docPath, { access: 'private', useCache: false });
+    const blob = await get(docPath, { access: 'private' });
 
     if (!blob?.stream) {
       return Response.json({ error: 'Document not found.' }, { status: 404 });
