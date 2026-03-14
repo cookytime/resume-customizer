@@ -1,0 +1,37 @@
+{
+  "name": "resume-customizer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@auth0/nextjs-auth0": "^4.16.0",
+    "@playwright/test": "^1.58.2",
+    "@vercel/analytics": "^1.6.1",
+    "@vercel/blob": "^2.3.1",
+    "botid": "^1.5.11",
+    "docx": "^9.6.0",
+    "file-saver": "^2.0.5",
+    "lucide-react": "^0.263.1",
+    "mammoth": "^1.12.0",
+    "next": "^14.2.35",
+    "pdfjs-dist": "^5.5.207",
+    "playwright": "^1.58.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vercel": "^50.28.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.19"
+  }
+}

@@ -195,4 +195,3 @@ Then check runtime logs again for errors.
 2. **`get()` throws on missing blobs** — `@vercel/blob`'s `get()` throws `BlobNotFoundError` for new users. Always wrap in try/catch and return sensible defaults.
 3. **Auth0 subs have pipe characters** — `auth0|abc123` format. Never encode these in blob paths.
 4. **Dev environment runs in a container** — Use the devcontainer for all build/test/run commands. `npm` is not available on the Windows host.
-5. **`get()` caching** — Always pass `useCache: false` to `get()` in API routes, otherwise repeated reads may return `304` with `stream: null`.

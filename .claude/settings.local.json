@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "mcp__claude_ai_Vercel__deploy_to_vercel",
+      "Bash(which vercel 2>/dev/null || npx vercel --version 2>/dev/null)",
+      "Bash(ls -la /workspaces/resume-customizer/.vercel/ 2>/dev/null; echo \"exit: $?\")",
+      "Bash(npx vercel deploy --prod --yes 2>&1)",
+      "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+      "mcp__plugin_context-mode_context-mode__ctx_search",
+      "mcp__plugin_context-mode_context-mode__ctx_execute_file",
+      "mcp__plugin_context-mode_context-mode__ctx_execute",
+      "Bash(npm install mammoth pdfjs-dist 2>&1 | tail -5)",
+      "Bash(npm run build 2>&1 | tail -30)",
+      "Bash(node -e \"console.log\\(require\\('pdfjs-dist/package.json'\\).version\\)\")",
+      "Bash(npm run build 2>&1 | tail -15)",
+      "Bash(npm run build 2>&1 | tail -5)",
+      "mcp__claude_ai_Vercel__get_runtime_logs",
+      "Bash(npm run build 2>&1 | grep -E \"error|Error|✓|✗|failed\")",
+      "mcp__claude_ai_Vercel__web_fetch_vercel_url",
+      "Bash(node -e \"const b = require\\('@vercel/blob'\\); console.log\\('exports:', Object.keys\\(b\\).join\\(', '\\)\\)\")",
+      "Bash(node -e \"const b = require\\('@vercel/blob'\\); console.log\\(b.get.toString\\(\\).substring\\(0, 500\\)\\)\")",
+      "Bash(node -e \"const b = require\\('@vercel/blob'\\); const src = b.get.toString\\(\\); const retIdx = src.indexOf\\('return'\\); console.log\\(src.substring\\(retIdx, retIdx + 300\\)\\)\")",
+      "Bash(node --env-file=.env.local tests/blob-readwrite.test.mjs 2>&1)",
+      "Bash(node --env-file=.env.local -e \"\nconst { head, getDownloadUrl } = require\\('@vercel/blob'\\);\n\\(async \\(\\) => {\n  // Check what getDownloadUrl returns for a test path\n  console.log\\('getDownloadUrl type:', typeof getDownloadUrl\\);\n  console.log\\('getDownloadUrl signature:', getDownloadUrl.toString\\(\\).substring\\(0, 200\\)\\);\n}\\)\\(\\);\n\")",
+      "Bash(node --env-file=.env.local -e \"\nconst { put, get } = require\\('@vercel/blob'\\);\n\\(async \\(\\) => {\n  // Write test data\n  await put\\('tests/test-get.json', JSON.stringify\\({test: true}\\), {\n    access: 'private', contentType: 'application/json',\n    addRandomSuffix: false, allowOverwrite: true,\n  }\\);\n\n  // First read\n  const r1 = await get\\('tests/test-get.json', { access: 'private' }\\);\n  console.log\\('Read 1 - statusCode:', r1.statusCode\\);\n  console.log\\('Read 1 - stream type:', typeof r1.stream, r1.stream === null ? 'NULL' : 'EXISTS'\\);\n  console.log\\('Read 1 - blob keys:', Object.keys\\(r1.blob || {}\\)\\);\n  if \\(r1.stream\\) {\n    const text = await new Response\\(r1.stream\\).text\\(\\);\n    console.log\\('Read 1 - content:', text\\);\n  }\n\n  // Second read\n  const r2 = await get\\('tests/test-get.json', { access: 'private' }\\);\n  console.log\\('Read 2 - statusCode:', r2.statusCode\\);\n  console.log\\('Read 2 - stream type:', typeof r2.stream, r2.stream === null ? 'NULL' : 'EXISTS'\\);\n  if \\(r2.stream\\) {\n    const text = await new Response\\(r2.stream\\).text\\(\\);\n    console.log\\('Read 2 - content:', text\\);\n  }\n}\\)\\(\\);\n\" 2>&1)",
+      "Bash(node -e \"const b = require\\('@vercel/blob'\\); console.log\\(b.get.toString\\(\\)\\)\" 2>&1 | head -60)",
+      "Bash(node --env-file=.env.local tests/e2e-api.test.mjs 2>&1)",
+      "Bash(node --env-file=.env.local tests/check-auth0.mjs 2>&1)",
+      "Bash(node --env-file=.env.local tests/fix-auth0-grants.mjs 2>&1)",
+      "Bash(node --env-file=.env.local tests/debug-blob-encoding.mjs 2>&1)",
+      "Bash(node --env-file=.env.local tests/blob-readwrite.test.mjs 2>&1 && npm run build 2>&1 | grep -E \"error|Error|✓|✗|failed\")",
+      "Bash(npx vercel deploy --yes 2>&1 | tail -5)"
+    ]
+  }
+}

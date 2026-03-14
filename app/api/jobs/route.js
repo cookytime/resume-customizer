@@ -17,7 +17,7 @@ async function getSessionUser() {
 
 async function loadJobs(userSub) {
   try {
-    const blob = await get(getUserJobsPath(userSub), { access: 'private' });
+    const blob = await get(getUserJobsPath(userSub), { access: 'private', useCache: false });
     if (!blob?.stream) return [];
     const text = await new Response(blob.stream).text();
     const parsed = JSON.parse(text);

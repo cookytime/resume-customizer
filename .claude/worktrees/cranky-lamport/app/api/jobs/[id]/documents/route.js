@@ -63,7 +63,7 @@ export async function GET(request, { params }) {
     const docType = searchParams.get('type') || 'resume';
 
     const docPath = getUserDocPath(userSub, id, docType);
-    const blob = await get(docPath, { access: 'private', useCache: false });
+    const blob = await get(docPath, { access: 'private' });
 
     if (!blob?.stream) {
       return Response.json({ error: 'Document not found.' }, { status: 404 });

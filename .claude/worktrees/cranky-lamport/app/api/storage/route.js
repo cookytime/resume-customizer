@@ -44,14 +44,14 @@ export async function GET() {
   // so we catch that specifically and return defaults.
   let blob;
   try {
-    blob = await get(path, { access: 'private', useCache: false });
+    blob = await get(path, { access: 'private' });
   } catch (error) {
     // BlobNotFoundError or any fetch error — treat as "no data yet"
     console.log(`[storage] No blob at ${path} for user ${userSub} (${error.name || error.message}), returning defaults`);
     return Response.json(getDefaultStorage());
   }
 
-  if (!blob?.stream) {
+  if (!blob || !blob.stream) {
     console.log(`[storage] No blob found at ${path} for user ${userSub}, returning defaults`);
     return Response.json(getDefaultStorage());
   }

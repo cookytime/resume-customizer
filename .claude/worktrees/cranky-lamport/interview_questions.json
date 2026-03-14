@@ -1,0 +1,52 @@
+{
+  "interview_prep_clean_versions": [
+    {
+      "question": "Have you designed self-service automation infrastructure or platforms that enabled non-engineers to safely create or trigger their own automations?",
+      "clean_60_second_version": "Yes. I\u2019ve built role-based automation systems that allow non-engineers to safely trigger workflows without direct infrastructure access. I used strict RBAC, scoped service accounts, opinionated interfaces, and Infrastructure-as-Code guardrails. Every workflow was logged and observable, so the safe path was the default path."
+    },
+    {
+      "question": "Can you walk me through how you've designed, deployed, and maintained AI agents or AI workflows in production with guardrails and observability?",
+      "clean_60_second_version": "I design AI systems as bounded workflows rather than open-ended bots. The model performs constrained tasks, outputs are schema-validated, and tool access is allowlisted. I version prompts, log every run, track latency and cost, and use canary releases with rollback paths. I treat AI like production infrastructure with measurable SLOs."
+    },
+    {
+      "question": "Describe a time you partnered with non-IT stakeholders to identify high-cost workflows and automate them.",
+      "clean_60_second_version": "At EverOps, I partnered with compliance and security teams to map manual SOC2 evidence workflows. We quantified hours spent per audit cycle and manual ticket enrichment time. I built automation pipelines that reduced audit effort by ~40% and manual security operations by ~30%, improving reliability and freeing engineers for higher-leverage work."
+    },
+    {
+      "question": "Can you share an example of automation that directly impacted a Revenue or Sales organization\u2019s efficiency?",
+      "clean_60_second_version": "I automated compliance reporting and ticket enrichment workflows that reduced SLA delays and accelerated enterprise security reviews. That reduced friction in renewals and enterprise sales cycles by improving response time and audit readiness."
+    },
+    {
+      "question": "Describe a system you built end-to-end, including data ingestion, logic, execution, and monitoring.",
+      "clean_60_second_version": "I built an automated SOC2 evidence pipeline that ingested security telemetry via APIs, normalized and validated the data, generated structured reports, and integrated outputs into ticketing workflows. I implemented idempotent jobs, logging, and alerting. The system reduced audit effort by ~40% and was fully observable in production."
+    },
+    {
+      "question": "Describe a system where errors would have had direct financial or compliance consequences and how you ensured reliability.",
+      "clean_60_second_version": "In compliance automation, incorrect evidence could impact audits and contracts. I designed for correctness using idempotent pipelines, schema validation, scoped service accounts, explicit failure handling, logging, and version control. The system prioritized explicit failure over silent corruption."
+    },
+    {
+      "question": "Do you have experience building AI agents or integrating AI/ML into operational automation?",
+      "clean_60_second_version": "Yes. I integrate AI as a constrained component within structured workflows. Outputs are validated before persistence, tool access is controlled, and all runs are logged and monitored. I focus on measurable outcomes like acceptance rate, latency, and cost per execution."
+    },
+    {
+      "question": "Have you designed automation systems that span multiple business functions?",
+      "clean_60_second_version": "Yes. I\u2019ve built automation spanning Security, Compliance, Support, and Revenue-adjacent teams. By automating evidence gathering and ticket enrichment, we improved SLA performance, audit readiness, and reduced operational friction across departments."
+    },
+    {
+      "question": "Do you have experience with data ingestion, orchestration, and end-to-end automated business processes?",
+      "clean_60_second_version": "Yes. I\u2019ve built ingestion pipelines using scheduled API pulls, applied transformation and policy logic, orchestrated execution flows, and implemented monitoring and alerting. These systems supported compliance, reporting, and operational automation end-to-end."
+    },
+    {
+      "question": "What programming languages are you proficient in for building production-grade automation systems?",
+      "clean_60_second_version": "My strongest automation languages are Python, Bash/Shell, and Terraform (HCL). I\u2019ve used them to build API integrations, infrastructure-as-code deployments, structured data pipelines, and production automation with guardrails and observability."
+    },
+    {
+      "question": "Describe your experience partnering with non-technical stakeholders to quantify automation opportunities.",
+      "clean_60_second_version": "I map workflows end-to-end with stakeholders, baseline time and error rates, and quantify manual effort. At EverOps, this approach led to automation that reduced audit effort by ~40% and manual security operations by ~30%, with measurable operational improvements."
+    },
+    {
+      "question": "Do you systematically measure hours eliminated, cycle time reduction, and cost avoidance from automation work?",
+      "clean_60_second_version": "Yes. I establish baseline metrics before automation, then measure time eliminated, workflow throughput changes, SLA adherence, and cost avoidance post-deployment. I focus on quantifiable improvements rather than anecdotal efficiency gains."
+    }
+  ]
+}

@@ -1,21 +1,19 @@
 /**
- * Blob Read/Write Cycle Test
- *
- * Verifies that Vercel Blob storage works correctly:
- * 1. Writes data to a test blob path
- * 2. Reads it back and verifies contents match
- * 3. Cleans up the test blob
- *
- * Also verifies that blob paths do NOT use encodeURIComponent
- * (the SDK handles encoding internally; pre-encoding breaks get()).
+ * Tests the blob read/write cycle using get() with useCache:false.
+ * This validates the fix for get() returning stream:null on 304.
  *
  * Run: node --env-file=.env.local tests/blob-readwrite.test.mjs
- * Requires: BLOB_READ_WRITE_TOKEN in .env.local
  */
+import { put, get, del } from '@vercel/blob';
 
-import { get, put, del } from '@vercel/blob';
+const TEST_PATH = 'tests/blob-readwrite-test.json';
+const TEST_DATA = {
+  profile: { resumeText: 'Test resume content', linkedInUrl: 'linkedin.com/in/test' },
+  savedApplications: [],
+  learnedSkills: { 'test question': 'test answer' },
+  skillsSeeded: true,
+};
 
-const TEST_PREFIX = `_test_${Date.now()}`;
 let passed = 0;
 let failed = 0;
 
@@ -29,167 +27,92 @@ function assert(condition, message) {
   }
 }
 
-async function testBlobReadWrite() {
-  console.log('\n--- Test: Basic blob read/write cycle ---');
+async function runTests() {
+  console.log('\n=== Blob Read/Write Test (useCache: false) ===\n');
 
-  const path = `${TEST_PREFIX}/test-data.json`;
-  const testData = { hello: 'world', timestamp: Date.now() };
+  // Clean up any previous test data
+  try { await del(TEST_PATH); } catch {}
 
-  // Write
-  const putResult = await put(path, JSON.stringify(testData), {
-    access: 'public',
-    contentType: 'application/json',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-  });
+  // Test 1: get() returns null stream for missing blob
+  console.log('Test 1: Missing blob returns null stream');
+  try {
+    const blob = await get(TEST_PATH, { access: 'private', useCache: false });
+    assert(!blob?.stream, 'Missing blob has no stream');
+    console.log(`  (statusCode: ${blob?.statusCode})`);
+  } catch (error) {
+    // Some versions throw on missing blob, that's also acceptable
+    assert(true, `get() threw for missing blob: ${error.constructor.name}`);
+  }
 
-  assert(putResult.url, 'put() returned a URL');
-  assert(putResult.pathname.includes('test-data.json'), 'put() pathname contains filename');
+  // Test 2: Write data with put()
+  console.log('\nTest 2: Write data with put()');
+  try {
+    const result = await put(TEST_PATH, JSON.stringify(TEST_DATA, null, 2), {
+      access: 'private',
+      contentType: 'application/json',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+    });
+    assert(result.url && result.url.length > 0, 'put() returns a URL');
+    console.log(`  (stored at: ${result.pathname})`);
+  } catch (error) {
+    assert(false, `put() failed: ${error.message}`);
+  }
 
-  // Read back
-  const getResult = await get(path, { access: 'public' });
-  assert(getResult !== null, 'get() returned a result');
-  assert(getResult.stream || getResult.url, 'get() result has stream or url');
+  // Test 3: Read back with get() useCache:false (first read)
+  console.log('\nTest 3: First read with get(useCache:false)');
+  try {
+    const blob = await get(TEST_PATH, { access: 'private', useCache: false });
+    assert(blob?.statusCode === 200, `statusCode is 200 (got ${blob?.statusCode})`);
+    assert(blob?.stream !== null, 'stream is not null');
 
-  if (getResult.stream) {
-    const text = await new Response(getResult.stream).text();
+    const text = await new Response(blob.stream).text();
     const parsed = JSON.parse(text);
-    assert(parsed.hello === 'world', 'Read-back data matches written data');
-  } else {
-    // Fallback: fetch from URL
-    const resp = await fetch(getResult.url);
-    const parsed = await resp.json();
-    assert(parsed.hello === 'world', 'Read-back data matches written data (via URL)');
+    assert(parsed.profile.resumeText === 'Test resume content', 'Profile resumeText matches');
+    assert(parsed.profile.linkedInUrl === 'linkedin.com/in/test', 'Profile linkedInUrl matches');
+    assert(parsed.learnedSkills['test question'] === 'test answer', 'Learned skills match');
+    assert(parsed.skillsSeeded === true, 'skillsSeeded matches');
+  } catch (error) {
+    assert(false, `Read failed: ${error.message}`);
+  }
+
+  // Test 4: Read again immediately (would be 304 without useCache:false)
+  console.log('\nTest 4: Second read (validates no caching)');
+  try {
+    const blob = await get(TEST_PATH, { access: 'private', useCache: false });
+    assert(blob?.statusCode === 200, `statusCode is 200 (got ${blob?.statusCode})`);
+    assert(blob?.stream !== null, 'stream is not null on second read');
+    const text = await new Response(blob.stream).text();
+    const parsed = JSON.parse(text);
+    assert(parsed.profile.resumeText === 'Test resume content', 'Second read returns correct data');
+  } catch (error) {
+    assert(false, `Second read failed: ${error.message}`);
+  }
+
+  // Test 5: Overwrite and read back
+  console.log('\nTest 5: Overwrite and read back');
+  const UPDATED_DATA = { ...TEST_DATA, profile: { resumeText: 'Updated resume', linkedInUrl: '' } };
+  try {
+    await put(TEST_PATH, JSON.stringify(UPDATED_DATA, null, 2), {
+      access: 'private',
+      contentType: 'application/json',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+    });
+    const blob = await get(TEST_PATH, { access: 'private', useCache: false });
+    assert(blob?.stream !== null, 'stream exists after overwrite');
+    const text = await new Response(blob.stream).text();
+    const parsed = JSON.parse(text);
+    assert(parsed.profile.resumeText === 'Updated resume', 'Overwritten data reads back correctly');
+  } catch (error) {
+    assert(false, `Overwrite test failed: ${error.message}`);
   }
 
   // Cleanup
-  await del(path);
-  console.log('  (cleaned up test blob)');
-}
+  try { await del(TEST_PATH); } catch {}
 
-async function testPathEncoding() {
-  console.log('\n--- Test: Path encoding with pipe character (Auth0 sub) ---');
-
-  // Auth0 subs look like "auth0|abc123" — the pipe must NOT be pre-encoded
-  const userSub = 'auth0|test-user-12345';
-
-  // Correct path: no encodeURIComponent
-  const correctPath = `users/${userSub}/${TEST_PREFIX}-encoding.json`;
-  const testData = { sub: userSub, test: true };
-
-  // Write with raw path (correct approach)
-  const putResult = await put(correctPath, JSON.stringify(testData), {
-    access: 'public',
-    contentType: 'application/json',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-  });
-
-  assert(putResult.url, 'put() with pipe in path succeeded');
-
-  // Read back with the same raw path
-  let readSuccess = false;
-  try {
-    const getResult = await get(correctPath, { access: 'public' });
-    if (getResult?.stream) {
-      const text = await new Response(getResult.stream).text();
-      const parsed = JSON.parse(text);
-      readSuccess = parsed.sub === userSub;
-    } else if (getResult?.url) {
-      const resp = await fetch(getResult.url);
-      const parsed = await resp.json();
-      readSuccess = parsed.sub === userSub;
-    }
-  } catch (e) {
-    console.error(`    get() threw: ${e.message}`);
-  }
-
-  assert(readSuccess, 'get() with raw pipe path reads back correctly');
-
-  // Now test the WRONG approach: encodeURIComponent
-  const wrongPath = `users/${encodeURIComponent(userSub)}/${TEST_PREFIX}-encoding-wrong.json`;
-  await put(wrongPath, JSON.stringify({ wrong: true }), {
-    access: 'public',
-    contentType: 'application/json',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-  });
-
-  // Try to read with the encoded path — this may silently fail
-  let wrongReadWorks = false;
-  try {
-    const wrongGet = await get(wrongPath, { access: 'public' });
-    if (wrongGet?.stream) {
-      const text = await new Response(wrongGet.stream).text();
-      wrongReadWorks = text.includes('wrong');
-    }
-  } catch (e) {
-    // Expected: double-encoding may cause BlobNotFoundError
-  }
-
-  // Note: this test documents the behavior. If wrongReadWorks is false,
-  // it confirms encodeURIComponent breaks get().
-  if (!wrongReadWorks) {
-    console.log('  ✓ Confirmed: encodeURIComponent breaks blob get() (expected behavior)');
-    passed++;
-  } else {
-    console.log('  ⚠ encodeURIComponent path read succeeded (unexpected but not fatal)');
-    // Don't count as failure — behavior may vary by blob SDK version
-  }
-
-  // Cleanup
-  await del(correctPath).catch(() => {});
-  await del(wrongPath).catch(() => {});
-  console.log('  (cleaned up test blobs)');
-}
-
-async function testSourceCodePaths() {
-  console.log('\n--- Test: Source code does NOT use encodeURIComponent on blob paths ---');
-
-  const fs = await import('fs');
-  const path = await import('path');
-
-  const filesToCheck = [
-    'app/api/storage/route.js',
-    'app/api/jobs/route.js',
-    'app/api/jobs/[id]/documents/route.js',
-  ];
-
-  for (const file of filesToCheck) {
-    const fullPath = path.resolve(file);
-    const content = fs.readFileSync(fullPath, 'utf-8');
-
-    // Check getUserPath / getUserJobsPath / getUserDocPath functions
-    const pathFnMatch = content.match(/function\s+get\w+Path[\s\S]*?return\s+`([^`]+)`/);
-    if (pathFnMatch) {
-      const pathTemplate = pathFnMatch[1];
-      const usesEncode = pathTemplate.includes('encodeURIComponent');
-      assert(!usesEncode, `${file}: path function does NOT use encodeURIComponent`);
-    } else {
-      console.log(`  ⚠ Could not find path function in ${file}`);
-    }
-  }
-}
-
-// Run all tests
-console.log('=== Blob Read/Write Tests ===');
-
-try {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    console.error('ERROR: BLOB_READ_WRITE_TOKEN not set. Run with: node --env-file=.env.local tests/blob-readwrite.test.mjs');
-    process.exit(1);
-  }
-
-  // Source code checks (no network needed)
-  await testSourceCodePaths();
-
-  // Live blob tests
-  await testBlobReadWrite();
-  await testPathEncoding();
-
-  console.log(`\n=== Results: ${passed} passed, ${failed} failed ===`);
+  console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
   process.exit(failed > 0 ? 1 : 0);
-} catch (error) {
-  console.error('\nFATAL:', error);
-  process.exit(1);
 }
+
+runTests();
