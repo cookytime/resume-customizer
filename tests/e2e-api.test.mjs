@@ -10,9 +10,14 @@ const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID;
 const AUTH0_CLIENT_SECRET = process.env.AUTH0_CLIENT_SECRET;
 const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
 
-const TEST_EMAIL = 'e2e-test-user@resume-customizer-test.com';
-const TEST_PASSWORD = 'T3st!Pass_E2E_2026';
-const TEST_CONNECTION = 'Username-Password-Authentication';
+const TEST_EMAIL = process.env.TEST_EMAIL || 'e2e-test-user@resume-customizer-test.com';
+const TEST_PASSWORD = process.env.TEST_PASSWORD;
+const TEST_CONNECTION = process.env.TEST_CONNECTION || 'Username-Password-Authentication';
+
+if (!TEST_PASSWORD) {
+  console.error('ERROR: TEST_PASSWORD env var is required. Add it to .env.local');
+  process.exit(1);
+}
 
 let passed = 0;
 let failed = 0;
