@@ -2,6 +2,7 @@ import { get, put } from '@vercel/blob';
 import { auth0 } from '../../../../../lib/auth0';
 
 function getUserDocPath(userSub, jobId, docType) {
+  // NEVER use encodeURIComponent — @vercel/blob SDK handles encoding internally.
   return `users/${userSub}/jobs/${jobId}/${docType}.md`;
 }
 

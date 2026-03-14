@@ -1857,7 +1857,7 @@ Rules:
               {savedToTracker ? (
                 <>
                   <Check size={20} />
-                  Saved to Job Tracker
+                  Saved to Job Tracker — <a href="/dashboard" className="underline">View Dashboard</a>
                 </>
               ) : loading ? (
                 <>

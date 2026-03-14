@@ -37,6 +37,10 @@ lib/
   auth0.js              — Auth0 client singleton (@auth0/nextjs-auth0 server SDK)
 middleware.js            — Auth0 middleware on all non-static routes
 next.config.js           — Standalone output mode
+tests/
+  blob-readwrite.test.mjs — Vercel Blob read/write cycle + path encoding tests
+  e2e-api.test.mjs        — Full E2E: Auth0 + storage + jobs API tests
+  playwright/              — Playwright browser tests
 ```
 
 ### Application Flow (in src/App.jsx)
@@ -87,15 +91,58 @@ See `.env.local.example` for required variables:
 
 ## Vercel Blob Usage
 
-**CRITICAL:** Never use `encodeURIComponent()` on blob pathnames. The `@vercel/blob` SDK handles URL encoding internally. Pre-encoding causes double-encoding (`%7C` → `%257C`) which makes `get()` return empty objects silently.
+**CRITICAL — READ THIS BEFORE TOUCHING ANY API ROUTE:**
+
+Never use `encodeURIComponent()` on blob pathnames. The `@vercel/blob` SDK handles URL encoding internally. Pre-encoding causes double-encoding (`%7C` → `%257C`) which makes `get()` return empty objects silently. This bug is invisible — no errors, no warnings, just silent data loss.
 
 ```js
-// WRONG: get() returns {} silently
+// WRONG — get() returns {} silently, data appears lost
 const path = `users/${encodeURIComponent(userSub)}/data.json`;
 
-// CORRECT: SDK handles encoding
+// CORRECT — SDK handles encoding
 const path = `users/${userSub}/data.json`;
 ```
+
+Auth0 user subs contain `|` characters (e.g. `auth0|abc123`). If you encode them, the pipe becomes `%7C`, then the SDK encodes again to `%257C`. The `put()` stores at the wrong path and `get()` can't find it.
+
+**Before modifying any API route that uses `@vercel/blob`, grep for `encodeURIComponent` and remove it if found in path construction.**
+
+## MANDATORY: Test Your Code
+
+**Every code change MUST be tested before claiming completion. No exceptions.**
+
+Claude Code has repeatedly shipped broken code by skipping tests. This wastes the user's time. Follow these steps IN ORDER after every change:
+
+### Step 1: Build (MUST pass)
+```bash
+npm run build
+```
+If this fails, fix it before doing anything else.
+
+### Step 2: Run automated tests (MUST pass)
+```bash
+node --env-file=.env.local tests/blob-readwrite.test.mjs       # Blob read/write + path encoding
+node --env-file=.env.local tests/e2e-api.test.mjs              # Full E2E: Auth0 + storage + jobs
+npx playwright test --config=tests/playwright.config.mjs       # Browser smoke tests
+```
+If any test fails, fix the code and re-run. Do NOT skip failing tests.
+
+### Step 3: Deploy to preview (NOT production)
+```bash
+npx vercel deploy --yes    # Preview only — NEVER --prod without explicit user approval
+```
+
+### Step 4: Verify the preview deployment
+- All pages return 200 (/, /login, /dashboard)
+- No errors in runtime logs
+- API routes respond correctly
+
+### Step 5: Only deploy to production after user approval
+```bash
+npx vercel deploy --prod --yes
+```
+
+**If you cannot run the tests (e.g. no dev container, no env vars), SAY SO. Do not pretend the tests passed. Do not claim the task is complete without test results.**
 
 ## Pre-Deployment Verification (MANDATORY)
 
@@ -141,3 +188,11 @@ Every generated resume MUST:
 npx vercel deploy --prod --yes
 ```
 Then check runtime logs again for errors.
+
+## Known Gotchas
+
+1. **Blob path encoding** — See "Vercel Blob Usage" section above. This has caused bugs multiple times.
+2. **`get()` throws on missing blobs** — `@vercel/blob`'s `get()` throws `BlobNotFoundError` for new users. Always wrap in try/catch and return sensible defaults.
+3. **Auth0 subs have pipe characters** — `auth0|abc123` format. Never encode these in blob paths.
+4. **Dev environment runs in a container** — Use the devcontainer for all build/test/run commands. `npm` is not available on the Windows host.
+5. **`get()` caching** — Always pass `useCache: false` to `get()` in API routes, otherwise repeated reads may return `304` with `stream: null`.

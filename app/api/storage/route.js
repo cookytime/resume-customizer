@@ -15,6 +15,8 @@ function getDefaultStorage() {
 }
 
 function getUserPath(userSub) {
+  // NEVER use encodeURIComponent — @vercel/blob SDK handles encoding internally.
+  // Pre-encoding causes double-encoding (%7C → %257C) which makes get() fail silently.
   return `users/${userSub}/${STORAGE_BLOB_NAME}`;
 }
 
@@ -30,21 +32,31 @@ async function getSessionUser() {
 }
 
 export async function GET() {
+  const userSub = await getSessionUser();
+
+  if (!userSub) {
+    return Response.json({ error: 'Authentication required.' }, { status: 401 });
+  }
+
+  const path = getUserPath(userSub);
+
+  // Try to load the blob. get() throws BlobNotFoundError for new users,
+  // so we catch that specifically and return defaults.
+  let blob;
   try {
-    const userSub = await getSessionUser();
+    blob = await get(path, { access: 'private', useCache: false });
+  } catch (error) {
+    // BlobNotFoundError or any fetch error — treat as "no data yet"
+    console.log(`[storage] No blob at ${path} for user ${userSub} (${error.name || error.message}), returning defaults`);
+    return Response.json(getDefaultStorage());
+  }
 
-    if (!userSub) {
-      return Response.json({ error: 'Authentication required.' }, { status: 401 });
-    }
+  if (!blob?.stream) {
+    console.log(`[storage] No blob found at ${path} for user ${userSub}, returning defaults`);
+    return Response.json(getDefaultStorage());
+  }
 
-    const path = getUserPath(userSub);
-    const blob = await get(path, { access: 'private', useCache: false });
-
-    if (!blob?.stream) {
-      console.log(`[storage] No blob found at ${path} for user ${userSub}, returning defaults`);
-      return Response.json(getDefaultStorage());
-    }
-
+  try {
     const text = await new Response(blob.stream).text();
     const parsed = JSON.parse(text);
     const skillCount = parsed?.learnedSkills ? Object.keys(parsed.learnedSkills).length : 0;
@@ -60,7 +72,7 @@ export async function GET() {
       skillsSeeded: Boolean(parsed?.skillsSeeded),
     });
   } catch (error) {
-    console.error(`[storage] GET error:`, error);
+    console.error(`[storage] GET parse error:`, error);
     return Response.json({ error: error.message || 'Failed to load storage.' }, { status: 500 });
   }
 }
