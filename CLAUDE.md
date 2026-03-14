@@ -37,6 +37,10 @@ lib/
   auth0.js              — Auth0 client singleton (@auth0/nextjs-auth0 server SDK)
 middleware.js            — Auth0 middleware on all non-static routes
 next.config.js           — Standalone output mode
+tests/
+  blob-readwrite.test.mjs — Vercel Blob read/write cycle + path encoding tests
+  e2e-api.test.mjs        — Full E2E: Auth0 + storage + jobs API tests
+  playwright/              — Playwright browser tests
 ```
 
 ### Application Flow (in src/App.jsx)
@@ -84,3 +88,110 @@ See `.env.local.example` for required variables:
 - Server components handle auth only; all app logic is client-side
 - API routes are thin proxies (Anthropic) or simple CRUD (storage)
 - Tailwind for all styling — no CSS modules or styled-components
+
+## Vercel Blob Usage
+
+**CRITICAL — READ THIS BEFORE TOUCHING ANY API ROUTE:**
+
+Never use `encodeURIComponent()` on blob pathnames. The `@vercel/blob` SDK handles URL encoding internally. Pre-encoding causes double-encoding (`%7C` → `%257C`) which makes `get()` return empty objects silently. This bug is invisible — no errors, no warnings, just silent data loss.
+
+```js
+// WRONG — get() returns {} silently, data appears lost
+const path = `users/${encodeURIComponent(userSub)}/data.json`;
+
+// CORRECT — SDK handles encoding
+const path = `users/${userSub}/data.json`;
+```
+
+Auth0 user subs contain `|` characters (e.g. `auth0|abc123`). If you encode them, the pipe becomes `%7C`, then the SDK encodes again to `%257C`. The `put()` stores at the wrong path and `get()` can't find it.
+
+**Before modifying any API route that uses `@vercel/blob`, grep for `encodeURIComponent` and remove it if found in path construction.**
+
+## MANDATORY: Test Your Code
+
+**Every code change MUST be tested before claiming completion. No exceptions.**
+
+Claude Code has repeatedly shipped broken code by skipping tests. This wastes the user's time. Follow these steps IN ORDER after every change:
+
+### Step 1: Build (MUST pass)
+```bash
+npm run build
+```
+If this fails, fix it before doing anything else.
+
+### Step 2: Run automated tests (MUST pass)
+```bash
+node --env-file=.env.local tests/blob-readwrite.test.mjs       # Blob read/write + path encoding
+node --env-file=.env.local tests/e2e-api.test.mjs              # Full E2E: Auth0 + storage + jobs
+npx playwright test --config=tests/playwright.config.mjs       # Browser smoke tests
+```
+If any test fails, fix the code and re-run. Do NOT skip failing tests.
+
+### Step 3: Deploy to preview (NOT production)
+```bash
+npx vercel deploy --yes    # Preview only — NEVER --prod without explicit user approval
+```
+
+### Step 4: Verify the preview deployment
+- All pages return 200 (/, /login, /dashboard)
+- No errors in runtime logs
+- API routes respond correctly
+
+### Step 5: Only deploy to production after user approval
+```bash
+npx vercel deploy --prod --yes
+```
+
+**If you cannot run the tests (e.g. no dev container, no env vars), SAY SO. Do not pretend the tests passed. Do not claim the task is complete without test results.**
+
+## Pre-Deployment Verification (MANDATORY)
+
+**NEVER claim a task is complete or deploy to production without verifying your work.**
+
+### 1. Automated Tests (ALL must pass before any deploy)
+```bash
+npm run build                                                  # Must compile cleanly
+node --env-file=.env.local tests/blob-readwrite.test.mjs       # Blob read/write cycle
+node --env-file=.env.local tests/e2e-api.test.mjs              # Full E2E: Auth0 user + storage + jobs
+```
+
+### 2. Deploy to Preview First
+```bash
+npx vercel deploy --yes    # Preview, NOT --prod
+```
+Then verify using `mcp__claude_ai_Vercel__web_fetch_vercel_url` and `mcp__claude_ai_Vercel__get_runtime_logs`:
+- All pages return 200 (/, /login, /dashboard)
+- No errors or warnings in runtime logs
+- API routes respond (GET /api/storage, GET /api/jobs)
+
+### 3. Manual Verification Checklist (before promoting to prod)
+The following MUST be verified by the user or via end-to-end tests before deploying to production:
+- [ ] New user sees resume upload/paste setup screen
+- [ ] Resume uploads work (PDF, DOCX, Markdown, paste)
+- [ ] Resume persists across page reload (does NOT re-ask for upload)
+- [ ] Job description analysis generates interview questions
+- [ ] Interview answers produce tailoring guidance
+- [ ] DOCX resume downloads with professional formatting, no AI speak
+- [ ] Resume content matches VOICE_PROFILE rules (no banned phrases)
+- [ ] "Save to Job Tracker" saves and appears on Dashboard
+- [ ] Dashboard displays all tracked jobs correctly
+- [ ] Edit Profile modal works (including file import)
+
+### 4. Resume Output Quality
+Every generated resume MUST:
+- Use professional design and formatting
+- Contain NO AI speak or banned phrases (see VOICE_PROFILE in App.jsx)
+- Be verified by reading the actual output before considering the task done
+
+### 5. Only Then Deploy to Production
+```bash
+npx vercel deploy --prod --yes
+```
+Then check runtime logs again for errors.
+
+## Known Gotchas
+
+1. **Blob path encoding** — See "Vercel Blob Usage" section above. This has caused bugs multiple times.
+2. **`get()` throws on missing blobs** — `@vercel/blob`'s `get()` throws `BlobNotFoundError` for new users. Always wrap in try/catch and return sensible defaults.
+3. **Auth0 subs have pipe characters** — `auth0|abc123` format. Never encode these in blob paths.
+4. **Dev environment runs in a container** — Use the devcontainer for all build/test/run commands. `npm` is not available on the Windows host.

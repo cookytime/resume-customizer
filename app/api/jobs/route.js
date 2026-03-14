@@ -4,7 +4,8 @@ import { auth0 } from '../../../lib/auth0';
 const JOBS_BLOB_NAME = 'jobs.json';
 
 function getUserJobsPath(userSub) {
-  return `users/${encodeURIComponent(userSub)}/${JOBS_BLOB_NAME}`;
+  // NEVER use encodeURIComponent — @vercel/blob SDK handles encoding internally.
+  return `users/${userSub}/${JOBS_BLOB_NAME}`;
 }
 
 async function getSessionUser() {

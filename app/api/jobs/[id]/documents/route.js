@@ -2,7 +2,8 @@ import { get, put } from '@vercel/blob';
 import { auth0 } from '../../../../../lib/auth0';
 
 function getUserDocPath(userSub, jobId, docType) {
-  return `users/${encodeURIComponent(userSub)}/jobs/${jobId}/${docType}.md`;
+  // NEVER use encodeURIComponent — @vercel/blob SDK handles encoding internally.
+  return `users/${userSub}/jobs/${jobId}/${docType}.md`;
 }
 
 async function getSessionUser() {
